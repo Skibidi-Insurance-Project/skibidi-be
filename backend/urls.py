@@ -8,5 +8,8 @@ urlpatterns = [
     path("add_policy", views.add_policies, name="add_policies"),
     path("purchase_policy", views.create_contract_account_member, name="create_account"),
     #path("create_claim")
-    path("get_policies", views.get_policies, name="retreive_policies")
+    # Get list of all purchased policies
+    # # Using this master list, sort by policy type
+    path("get_policies", views.get_policies, name="retreive_policies"),
+    path("get_obesity_level", views.predict_obesity_levels, name = "predict_obesity")
 ]

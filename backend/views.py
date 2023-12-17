@@ -6,26 +6,33 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import datetime
 from django.core.serializers import serialize
+import pandas as pd
+import joblib
+import os
 
+CURRENT_WORKING_DIR = os.getcwd()
 # Create your views here.
 def index(_):
-    return HttpResponse("Skibidi backend server up and running 🚀")
+    return HttpResponse("Skibidi backend server up and running 🚀", 200)
 
 def create_contract_account_member(request):
     """
     When user buys policy, they gotta provide 
     """
     # Assuming data is received via POST request
-    received_data = request.POST
-    
+    received_data = json.loads(request.body)
+    print(type(received_data['policy_id']))
     # Extract necessary fields from the received JSON
     policy_id = received_data.get('policy_id')
     ssn = received_data.get('ssn')
     credit_card_number = received_data.get('credit_card_number')
-
+    # all_products = Product.objects.all()
+    print("policy_id is ", policy_id, type(policy_id))
+    # for product in all_products:
+    #     print(f"Policy ID: {type(product.policy_id)}, Line of Business: {product.line_of_business}, Plan Name: {product.plan_name}")
     # Retrieve product details based on the policy ID
     product = Product.objects.get(policy_id=policy_id)
-    product_info = Product.objects.get(policy_id=product)
+    product_info = ProductInfo.objects.get(product_id = policy_id)
 
     # Parse duration string to calculate expiration date
     duration_str = product_info.duration
@@ -34,7 +41,7 @@ def create_contract_account_member(request):
     duration_unit = duration_split[1].lower()
 
     # Calculate expiration date based on duration
-    expiration_date = datetime.now()
+    expiration_date = datetime.datetime.now()
     if 'year' in duration_unit:
         expiration_date += datetime.timedelta(days=duration_value * 365)
     elif 'month' in duration_unit:
@@ -46,7 +53,7 @@ def create_contract_account_member(request):
 
     # Create a Contract record
     contract = Contract.objects.create(
-        coverage_type=product.coverage_type,
+        coverage_type=product.line_of_business,
         activity_status='Active',
         card_type='Credit',
         expiration_date=expiration_date,
@@ -60,9 +67,8 @@ def create_contract_account_member(request):
     # Create an Account record associated with the contract
     account = Account.objects.create(
         cust_ssn=customer,
-        account_name=f"Account for {customer.CustSSN}",
         contract_number=contract,
-        start_date=datetime.now()
+        start_date=datetime.datetime.now()
     )
 
     # Create a CustomerMemberAccount record linking Account and Customer
@@ -148,3 +154,44 @@ def add_policies(request):
         )
 
     return HttpResponse("Backend server up and running")
+
+#def process_claims():
+@csrf_exempt
+def predict_obesity_levels(request):
+    """
+    Get user's personal data from frontend and predict the obesity levels
+    Use these obesity predictions to adjust pricing for insurance policies for those in need
+    """
+    # Get data as JSON
+    if request.method == 'GET':
+        json_data = json.loads(request.body)
+
+        try:
+            single_user_row = pd.DataFrame([json_data])
+        except Exception as e:
+            print(f"{e} - can't read JSON")
+        # load pipeline
+        labels_from_file = {}
+        
+        with open(f"{CURRENT_WORKING_DIR}/backend/ml/class_labels.json", "r") as infile: 
+                labels_from_file = json.load(infile)
+        
+        pipeline_loaded = joblib.load(f'{CURRENT_WORKING_DIR}/backend/ml/model_file.joblib')
+        prediction_for_user = pipeline_loaded.predict(single_user_row.iloc[[0]])[0]
+        obesity_level = labels_from_file[str(prediction_for_user)]
+
+        ## Find out how many users have weight insurance needs
+        ## Change pricing accordingly
+        product_info = ProductInfo.objects.get(product_id=Product.objects.get(line_of_business='weight').policy_id)
+        print(product_info.product_id)
+        
+        
+        # Update the price attribute of the ProductInfo instance
+        product_info.premium_amount = 200.0  # Replace with the new price value
+        # Save the changes to the database
+        product_info.save()
+
+        return HttpResponse({f"User is {obesity_level}"}, status=201)
+        
+    else:
+        return HttpResponse("Wrong method", status = 405)
