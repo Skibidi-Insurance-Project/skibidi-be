@@ -9,6 +9,8 @@ from django.core.serializers import serialize
 import pandas as pd
 import joblib
 import os
+from django.forms.models import model_to_dict
+
 
 CURRENT_WORKING_DIR = os.getcwd()
 # Create your views here.
@@ -113,6 +115,64 @@ def get_policies(request):
 
     return JsonResponse(list(all_products_with_descriptions), safe=False)
 
+@csrf_exempt
+def get_policies_by_type(request):
+    """
+    Retrieve all products along with their descriptions
+    """
+
+    # For GET request
+    param_value = request.GET.get('policy_type', "all")
+    line_of_business_type = param_value
+
+    all_products_with_descriptions = Product.objects.select_related('productinfo').values(
+        'policy_id', 'line_of_business', 'plan_name',
+        'productinfo__product_description', 'productinfo__premium_amount', 'productinfo__duration',
+        # Include all fields from both models as needed
+    )
+
+    if line_of_business_type is not "all":
+        filtered_products = all_products_with_descriptions.filter(line_of_business=line_of_business_type)
+        return JsonResponse(list(filtered_products), safe=False)
+    
+    return JsonResponse(list(all_products_with_descriptions), safe=False)
+
+@csrf_exempt
+def get_purchased_policies(request):
+    """
+    Retrieve policies for a particular user
+    """
+    ssn_info = json.loads(request.body)
+    ssn = ssn_info.get('ssn',None)
+    if ssn is not None:
+        customer_accounts = CustomerMemberAccount.objects.select_related('type').filter(cust_ssn=ssn)
+        if customer_accounts.exists():
+            customer_accounts_dicts = [model_to_dict(account) for account in customer_accounts]
+            print(customer_accounts_dicts)
+            # Prepare the data for JSON serialization
+            data = []
+            for account in customer_accounts_dicts:
+                product = account.get("type")
+                print("product is ", product)
+                product_info = ProductInfo.objects.get(product_id=product)
+                product_object = model_to_dict(Product.objects.get(policy_id=product))
+                print(product)
+                data.append({
+                    'type': {
+                        'policy_id': product,
+                        'line_of_business': product_object.get('line_of_business'),
+                        'plan_name': product_object.get('plan_name'),
+                        'product_info': {
+                            'product_description': product_info.product_description,
+                            'premium_amount': str(product_info.premium_amount),
+                            'duration': product_info.duration,
+                        },
+                    },
+                })
+            return JsonResponse(data, safe=False)
+    else:
+        HttpResponse("No SSN found, bad request", 400)
+    pass
 
 @csrf_exempt
 def add_policies(request):
