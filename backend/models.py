@@ -49,12 +49,12 @@ class Product(models.Model):
         ('mental', 'Mental'),
     ]
 
-    policy_id = models.CharField(primary_key=True, max_length=100)
+    policy_id = models.CharField(primary_key=True, max_length=100, db_index=True)
     line_of_business = models.CharField(max_length=20, choices=LINE_OF_BUSINESS_CHOICES)
     plan_name = models.CharField(max_length=255)
 
 class ProductInfo(models.Model):
-    product_id = models.ForeignKey(Product, on_delete=models.DO_NOTHING)
+    product_id = models.ForeignKey(Product, on_delete=models.DO_NOTHING, db_index=True)
     product_description = models.TextField()
     premium_amount = models.DecimalField(max_digits=10, decimal_places=2)
     duration = models.CharField(max_length=100, default="2 years")
