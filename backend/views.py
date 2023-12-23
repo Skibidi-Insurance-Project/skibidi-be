@@ -238,6 +238,8 @@ def predict_obesity_levels(request):
         
         pipeline_loaded = joblib.load(f'{CURRENT_WORKING_DIR}/backend/ml/model_file.joblib')
         prediction_for_user = pipeline_loaded.predict(single_user_row.iloc[[0]])[0]
+        pipeline_loaded.partial_fit(single_user_row.iloc[[0]], [prediction_for_user])
+        joblib.dump(f'{CURRENT_WORKING_DIR}/backend/ml/model_file.joblib')
         obesity_level = labels_from_file[str(prediction_for_user)]
 
         ## Find out how many users have weight insurance needs
